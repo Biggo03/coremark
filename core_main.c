@@ -435,6 +435,9 @@ for (i = 0; i < MULTITHREAD; i++)
     for (i = 0; i < MULTITHREAD; i++)
         portable_free(results[i].memblock[0]);
 #endif
+#if defined(HAS_PORTABLE_SHUTDOWN)
+    portable_shutdown(&results[0], total_errors, seedcrc, total_time);
+#endif
     /* And last call any target specific code for finalizing */
     portable_fini(&(results[0].port));
 

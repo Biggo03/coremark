@@ -17,6 +17,30 @@ Original Author: Shay Gal-on
 */
 #include "coremark.h"
 #include "core_portme.h"
+#include <stdarg.h>
+
+#define CSR_MCYCLE       0xB00u
+#define CSR_MDBG         0x7A0u
+#define CSR_MTEST_STATUS 0x7C0u
+
+#define TEST_PASS 0xABCD1234u
+#define TEST_FAIL 0xDEADBEEFu
+
+#define COREMARK_REPORT_MAGIC 0x434D524Bu
+
+static ee_u32
+read_csr(ee_u32 csr_addr)
+{
+    ee_u32 value;
+    asm volatile("csrr %0, %1" : "=r"(value) : "i"(csr_addr));
+    return value;
+}
+
+static void
+write_csr(ee_u32 csr_addr, ee_u32 value)
+{
+    asm volatile("csrw %0, %1" : : "i"(csr_addr), "r"(value));
+}
 
 #if VALIDATION_RUN
 volatile ee_s32 seed1_volatile = 0x3415;
@@ -35,6 +59,9 @@ volatile ee_s32 seed3_volatile = 0x8;
 #endif
 volatile ee_s32 seed4_volatile = ITERATIONS;
 volatile ee_s32 seed5_volatile = 0;
+
+volatile coremark_run_report coremark_report = { 0 };
+
 /* Porting : Timing functions
         How to capture time and convert to seconds must be ported to whatever is
    supported by the platform. e.g. Read value from on board RTC, read value from
@@ -44,8 +71,7 @@ volatile ee_s32 seed5_volatile = 0;
 CORETIMETYPE
 barebones_clock()
 {
-#error \
-    "You must implement a method to measure time in barebones_clock()! This function should return current time.\n"
+    return read_csr(CSR_MCYCLE);
 }
 /* Define : TIMER_RES_DIVIDER
         Divider to trade off timer resolution and total time that can be
@@ -59,7 +85,7 @@ barebones_clock()
 #define MYTIMEDIFF(fin, ini)       ((fin) - (ini))
 #define TIMER_RES_DIVIDER          1
 #define SAMPLE_TIME_IMPLEMENTATION 1
-#define EE_TICKS_PER_SEC           (CLOCKS_PER_SEC / TIMER_RES_DIVIDER)
+#define EE_TICKS_PER_SEC           (RV32_COREMARK_CPU_FREQ_HZ / TIMER_RES_DIVIDER)
 
 /** Define Host specific (POSIX), or target specific global time variables. */
 static CORETIMETYPE start_time_val, stop_time_val;
@@ -122,6 +148,13 @@ time_in_secs(CORE_TICKS ticks)
 
 ee_u32 default_num_contexts = 1;
 
+int
+ee_printf(const char *fmt, ...)
+{
+    (void)fmt;
+    return 0;
+}
+
 /* Function : portable_init
         Target specific initialization code
         Test for some common mistakes.
@@ -129,11 +162,8 @@ ee_u32 default_num_contexts = 1;
 void
 portable_init(core_portable *p, int *argc, char *argv[])
 {
-#error \
-    "Call board initialization routines in portable init (if needed), in particular initialize UART!\n"
-
-    (void)argc; // prevent unused warning
-    (void)argv; // prevent unused warning
+    (void)argc;
+    (void)argv;
 
     if (sizeof(ee_ptr_int) != sizeof(ee_u8 *))
     {
@@ -145,6 +175,16 @@ portable_init(core_portable *p, int *argc, char *argv[])
     {
         ee_printf("ERROR! Please define ee_u32 to a 32b unsigned type!\n");
     }
+    coremark_report.magic        = 0;
+    coremark_report.total_ticks  = 0;
+    coremark_report.iterations   = 0;
+    coremark_report.size         = 0;
+    coremark_report.total_errors = 0;
+    coremark_report.seedcrc      = 0;
+    coremark_report.crclist      = 0;
+    coremark_report.crcmatrix    = 0;
+    coremark_report.crcstate     = 0;
+    coremark_report.crcfinal     = 0;
     p->portable_id = 1;
 }
 /* Function : portable_fini
@@ -154,4 +194,25 @@ void
 portable_fini(core_portable *p)
 {
     p->portable_id = 0;
+}
+
+void
+portable_shutdown(struct RESULTS_S *results,
+                  ee_s16            total_errors,
+                  ee_u16            seedcrc,
+                  CORE_TICKS        total_time)
+{
+    coremark_report.magic        = COREMARK_REPORT_MAGIC;
+    coremark_report.total_ticks  = total_time;
+    coremark_report.iterations   = results->iterations;
+    coremark_report.size         = results->size;
+    coremark_report.total_errors = (ee_u32)(ee_s32)total_errors;
+    coremark_report.seedcrc      = seedcrc;
+    coremark_report.crclist      = results->crclist;
+    coremark_report.crcmatrix    = results->crcmatrix;
+    coremark_report.crcstate     = results->crcstate;
+    coremark_report.crcfinal     = results->crc;
+
+    write_csr(CSR_MDBG, ((ee_u32)seedcrc << 16) | results->crc);
+    write_csr(CSR_MTEST_STATUS, (total_errors == 0) ? TEST_PASS : TEST_FAIL);
 }

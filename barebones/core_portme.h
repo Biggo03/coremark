@@ -16,11 +16,14 @@ limitations under the License.
 Original Author: Shay Gal-on
 */
 /* Topic : Description
-        This file contains configuration constants required to execute on
-   different platforms
+        This file contains configuration constants for the riscv_pipelined
+   processor fork of CoreMark.
 */
 #ifndef CORE_PORTME_H
 #define CORE_PORTME_H
+
+#include <stddef.h>
+
 /************************/
 /* Data types and settings */
 /************************/
@@ -28,21 +31,21 @@ Original Author: Shay Gal-on
         Define to 1 if the platform supports floating point.
 */
 #ifndef HAS_FLOAT
-#define HAS_FLOAT 1
+#define HAS_FLOAT 0
 #endif
 /* Configuration : HAS_TIME_H
         Define to 1 if platform has the time.h header file,
         and implementation of functions thereof.
 */
 #ifndef HAS_TIME_H
-#define HAS_TIME_H 1
+#define HAS_TIME_H 0
 #endif
 /* Configuration : USE_CLOCK
         Define to 1 if platform has the time.h header file,
         and implementation of functions thereof.
 */
 #ifndef USE_CLOCK
-#define USE_CLOCK 1
+#define USE_CLOCK 0
 #endif
 /* Configuration : HAS_STDIO
         Define to 1 if the platform has stdio.h.
@@ -75,6 +78,12 @@ Original Author: Shay Gal-on
 #ifndef MEM_LOCATION
 #define MEM_LOCATION "STACK"
 #endif
+
+#ifndef RV32_COREMARK_CPU_FREQ_HZ
+#define RV32_COREMARK_CPU_FREQ_HZ 100000000UL
+#endif
+
+#define HAS_PORTABLE_SHUTDOWN 1
 
 /* Data Types :
         To avoid compiler issues, define the data types that need ot be used for
@@ -166,7 +175,7 @@ typedef ee_u32 CORE_TICKS;
    greater then 1.
 */
 #ifndef MAIN_HAS_NOARGC
-#define MAIN_HAS_NOARGC 0
+#define MAIN_HAS_NOARGC 1
 #endif
 
 /* Configuration : MAIN_HAS_NORETURN
@@ -190,9 +199,31 @@ typedef struct CORE_PORTABLE_S
     ee_u8 portable_id;
 } core_portable;
 
+typedef struct COREMARK_RUN_REPORT_S
+{
+    ee_u32 magic;
+    ee_u32 total_ticks;
+    ee_u32 iterations;
+    ee_u32 size;
+    ee_u32 total_errors;
+    ee_u16 seedcrc;
+    ee_u16 crclist;
+    ee_u16 crcmatrix;
+    ee_u16 crcstate;
+    ee_u16 crcfinal;
+} coremark_run_report;
+
+extern volatile coremark_run_report coremark_report;
+
 /* target specific init/fini */
 void portable_init(core_portable *p, int *argc, char *argv[]);
 void portable_fini(core_portable *p);
+
+struct RESULTS_S;
+void portable_shutdown(struct RESULTS_S *results,
+                       ee_s16            total_errors,
+                       ee_u16            seedcrc,
+                       CORE_TICKS        total_time);
 
 #if !defined(PROFILE_RUN) && !defined(PERFORMANCE_RUN) \
     && !defined(VALIDATION_RUN)

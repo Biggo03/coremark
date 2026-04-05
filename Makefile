@@ -14,31 +14,19 @@
 # 
 # Original Author: Shay Gal-on
 
-# Make sure the default target is to simply build and run the benchmark.
+# Make sure the default target is to build the benchmark artifacts.
 RSTAMP = v1.0
+.DEFAULT_GOAL := build
 
-.PHONY: run score
-run: $(OUTFILE) rerun score
+.PHONY: build run score
+run: build rerun score
 
 score:
 	@echo "Check run1.log and run2.log for results."
 	@echo "See README.md for run and reporting rules." 
 	
 ifndef PORT_DIR
-# Ports for a couple of common self hosted platforms
-UNAME=$(shell if command -v uname 2> /dev/null; then uname ; fi)
-ifneq (,$(findstring CYGWIN,$(UNAME)))
-PORT_DIR=cygwin
-endif
-ifneq (,$(findstring Darwin,$(UNAME)))
-PORT_DIR=macos
-endif
-ifneq (,$(findstring FreeBSD,$(UNAME)))
-PORT_DIR=freebsd
-endif
-ifneq (,$(findstring Linux,$(UNAME)))
-PORT_DIR=linux
-endif
+PORT_DIR=barebones
 endif
 ifndef PORT_DIR
 $(error PLEASE define PORT_DIR! (e.g. make PORT_DIR=simple)) 
@@ -71,6 +59,8 @@ CHECK_FILES = $(ORIG_SRCS) $(HEADERS)
 
 $(OPATH):
 	$(MKDIR) $(OPATH)
+
+build: $(OUTFILE)
 
 .PHONY: compile link
 ifdef SEPARATE_COMPILE

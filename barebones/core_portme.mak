@@ -14,56 +14,46 @@
 # 
 # Original Author: Shay Gal-on
 
-#File : core_portme.mak
+# File : core_portme.mak
 
-# Flag : OUTFLAG
-#	Use this flag to define how to to get an executable (e.g -o)
-OUTFLAG= -o
-# Flag : CC
-#	Use this flag to define compiler to use
-CC 		= gcc
-# Flag : LD
-#	Use this flag to define compiler to use
-LD		= gld
-# Flag : AS
-#	Use this flag to define compiler to use
-AS		= gas
-# Flag : CFLAGS
-#	Use this flag to define compiler options. Note, you can add compiler options from the command line using XCFLAGS="other flags"
-PORT_CFLAGS = -O0 -g
-FLAGS_STR = "$(PORT_CFLAGS) $(XCFLAGS) $(XLFLAGS) $(LFLAGS_END)"
-CFLAGS = $(PORT_CFLAGS) -I$(PORT_DIR) -I. -DFLAGS_STR=\"$(FLAGS_STR)\" 
-#Flag : LFLAGS_END
-#	Define any libraries needed for linking or other flags that should come at the end of the link line (e.g. linker scripts). 
-#	Note : On certain platforms, the default clock_gettime implementation is supported but requires linking of librt.
-SEPARATE_COMPILE=1
-# Flag : SEPARATE_COMPILE
-# You must also define below how to create an object file, and how to link.
-OBJOUT 	= -o
-LFLAGS 	= 
+OUTFLAG = -o
+
+RISCV_PREFIX ?= riscv32-unknown-elf
+CC       = $(RISCV_PREFIX)-gcc
+LD       = $(CC)
+OBJCOPY  = $(RISCV_PREFIX)-objcopy
+OBJDUMP  = $(RISCV_PREFIX)-objdump
+
+ARCH = rv32i_zicsr
+ABI  = ilp32
+
+ITERATIONS ?= 1
+
+PORT_CFLAGS = -O2 -march=$(ARCH) -mabi=$(ABI) -ffreestanding -fno-builtin -fno-common -fno-delete-null-pointer-checks -fno-isolate-erroneous-paths-dereference -msmall-data-limit=8
+FLAGS_STR   = "$(PORT_CFLAGS) $(XCFLAGS) $(XLFLAGS) $(LFLAGS_END)"
+CFLAGS      = $(PORT_CFLAGS) -I$(PORT_DIR) -I. -DFLAGS_STR=\"$(FLAGS_STR)\"
+
+SEPARATE_COMPILE = 1
+OBJOUT  = -o
+LFLAGS  = -march=$(ARCH) -mabi=$(ABI)
 ASFLAGS =
-OFLAG 	= -o
-COUT 	= -c
+OFLAG   = -o
+COUT    = -c
 
-LFLAGS_END = 
-# Flag : PORT_SRCS
-# 	Port specific source files can be added here
-#	You may also need cvt.c if the fcvt functions are not provided as intrinsics by your compiler!
-PORT_SRCS = $(PORT_DIR)/core_portme.c $(PORT_DIR)/ee_printf.c
+LFLAGS_END = -T $(PORT_DIR)/linker.ld -nostdlib -Wl,-Map,$(OUTFILE:.elf=.map) -lgcc
+
+PORT_SRCS = $(PORT_DIR)/core_portme.c $(PORT_DIR)/_start.s
+PORT_OBJS = $(PORT_DIR)/core_portme$(OEXT) $(PORT_DIR)/_start$(OEXT)
 vpath %.c $(PORT_DIR)
 vpath %.s $(PORT_DIR)
 
-# Flag : LOAD
-#	For a simple port, we assume self hosted compile and run, no load needed.
-
-# Flag : RUN
-#	For a simple port, we assume self hosted compile and run, simple invocation of the executable
-
-LOAD = echo "Please set LOAD to the process of loading the executable to the flash"
-RUN = echo "Please set LOAD to the process of running the executable (e.g. via jtag, or board reset)"
+LOAD = echo "Load $(OUTFILE:.elf=.text.hex) into IMEM and $(OUTFILE:.elf=.data.hex) into DMEM."
+RUN  = echo "Use the riscv_pipelined simulation flow to execute $(OUTFILE)."
 
 OEXT = .o
-EXE = .bin
+EXE  = .elf
+
+PORT_CLEAN = $(OUTFILE:.elf=.dump) $(OUTFILE:.elf=.map) $(OUTFILE:.elf=.text.hex) $(OUTFILE:.elf=.data.hex) $(OUTFILE:.elf=.text.bin) $(OUTFILE:.elf=.data.bin)
 
 $(OPATH)$(PORT_DIR)/%$(OEXT) : %.c
 	$(CC) $(CFLAGS) $(XCFLAGS) $(COUT) $< $(OBJOUT) $@
@@ -72,16 +62,21 @@ $(OPATH)%$(OEXT) : %.c
 	$(CC) $(CFLAGS) $(XCFLAGS) $(COUT) $< $(OBJOUT) $@
 
 $(OPATH)$(PORT_DIR)/%$(OEXT) : %.s
-	$(AS) $(ASFLAGS) $< $(OBJOUT) $@
-
-# Target : port_pre% and port_post%
-# For the purpose of this simple port, no pre or post steps needed.
+	$(CC) $(PORT_CFLAGS) $(XCFLAGS) $(COUT) $< $(OBJOUT) $@
 
 .PHONY : port_prebuild port_postbuild port_prerun port_postrun port_preload port_postload
-port_pre% port_post% : 
+port_pre% :
 
-# FLAG : OPATH
-# Path to the output folder. Default - current folder.
+port_postbuild :
+	$(OBJDUMP) -D $(OUTFILE) > $(OUTFILE:.elf=.dump)
+	$(OBJCOPY) -O binary -j .text -j .init $(OUTFILE) $(OUTFILE:.elf=.text.bin)
+	hexdump -v -e '1/4 "%08x\n"' $(OUTFILE:.elf=.text.bin) > $(OUTFILE:.elf=.text.hex)
+	rm -f $(OUTFILE:.elf=.text.bin)
+	$(OBJCOPY) -O binary -j .rodata -j .data -j .sdata $(OUTFILE) $(OUTFILE:.elf=.data.bin)
+	if [ -s $(OUTFILE:.elf=.data.bin) ]; then hexdump -v -e '1/4 "%08x\n"' $(OUTFILE:.elf=.data.bin) > $(OUTFILE:.elf=.data.hex); else : > $(OUTFILE:.elf=.data.hex); fi
+	rm -f $(OUTFILE:.elf=.data.bin)
+
+port_prerun port_postrun port_preload port_postload :
+
 OPATH = ./
 MKDIR = mkdir -p
-
