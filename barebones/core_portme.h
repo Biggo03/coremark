@@ -189,6 +189,21 @@ typedef ee_u32 CORE_TICKS;
 #define MAIN_HAS_NORETURN 0
 #endif
 
+/* Configuration : COREMARK_SMOKE
+        Enable a short functional test of CoreMark without enforcing the
+        minimum 10-second execution time required for official benchmarking.
+
+        Valid values:
+        0 - Benchmark mode: enforce the minimum execution time.
+        1 - Smoke mode: skip the minimum execution time check.
+
+        All algorithm CRC and data-type validation checks remain enabled.
+        Smoke mode results are not valid for official CoreMark reporting.
+*/
+#ifndef COREMARK_SMOKE
+#define COREMARK_SMOKE 0
+#endif
+
 /* Variable : default_num_contexts
         Not used for this simple port, must contain the value 1.
 */

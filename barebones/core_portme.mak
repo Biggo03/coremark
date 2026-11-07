@@ -11,14 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# 
+#
 # Original Author: Shay Gal-on
 
 # File : core_portme.mak
 
 OUTFLAG = -o
 
-RISCV_PREFIX ?= riscv32-unknown-elf
+RISCV_PREFIX ?= riscv64-unknown-elf
 CC       = $(RISCV_PREFIX)-gcc
 LD       = $(CC)
 OBJCOPY  = $(RISCV_PREFIX)-objcopy
